@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+* {
+  @apply antialiased;
+}
+
+.md {
+  @apply prose prose-slate max-w-none;
+}
+
+.md pre {
+  @apply overflow-auto rounded-xl bg-slate-50 ring-1 ring-slate-200;
+}
+
+.md code {
+  @apply rounded bg-slate-100 px-1 py-0.5 text-[0.9em];
+}
+
+.md pre code {
+  @apply bg-transparent p-0;
+}
+
+.md pre .hljs {
+  background: transparent;
+}

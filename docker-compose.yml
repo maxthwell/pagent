@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: pagent
+      POSTGRES_PASSWORD: pagent
+      POSTGRES_DB: pagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  api:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    volumes:
+      - ./:/app
+      - ./uploads:/app/uploads
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @pagent/api dev"
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "4000:4000"
+
+  worker:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    volumes:
+      - ./:/app
+      - ./uploads:/app/uploads
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @pagent/worker dev"
+    depends_on:
+      - postgres
+      - redis
+
+  web:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    volumes:
+      - ./:/app
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @pagent/web dev"
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

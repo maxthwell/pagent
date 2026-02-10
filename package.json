@@ -1,0 +1,27 @@
+{
+  "name": "pagent",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo build --filter=@pagent/db --filter=@pagent/shared --filter=@pagent/providers --filter=@pagent/core && turbo dev --filter=@pagent/api --filter=@pagent/worker --filter=@pagent/web",
+    "dev:apps": "turbo build --filter=@pagent/db --filter=@pagent/shared --filter=@pagent/providers --filter=@pagent/core && turbo dev --filter=@pagent/api --filter=@pagent/worker --filter=@pagent/web",
+    "dev:all": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @pagent/db prisma generate",
+    "db:migrate": "pnpm --filter @pagent/db prisma migrate deploy"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "turbo": "^2.5.0",
+    "typescript": "^5.5.4"
+  }
+}
