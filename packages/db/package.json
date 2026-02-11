@@ -1,0 +1,30 @@
+{
+  "name": "@pagent/db",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/prisma-with-env.mjs generate && tsup src/index.ts --format esm --dts",
+    "dev": "node scripts/prisma-with-env.mjs generate && tsup src/index.ts --format esm --dts --watch",
+    "prisma": "node scripts/prisma-with-env.mjs",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.1"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.2",
+    "prisma": "^5.19.1",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}

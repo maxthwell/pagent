@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+.turbo/
+
+# Test coverage
+coverage/
+
+# Runtime data
+uploads/
+tmp/
+notes/
+skills_generated/
+
+# Logs
+*.log
+logs/
+
+# Local env files (keep example)
+.env
+.env.*
+!.env.example
+
+# Editors/OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

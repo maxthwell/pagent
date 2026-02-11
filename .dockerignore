@@ -1,0 +1,15 @@
+node_modules
+.pnpm-store
+.turbo
+.next
+dist
+coverage
+tmp
+notes
+uploads
+skills_generated
+.git
+.DS_Store
+.env
+.env.*
+!.env.example

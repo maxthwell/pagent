@@ -1,0 +1,28 @@
+{
+  "name": "pagent",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm db:migrate && pnpm db:generate && turbo build --filter=@pagent/db --filter=@pagent/shared --filter=@pagent/providers --filter=@pagent/core && turbo dev --filter=@pagent/api --filter=@pagent/worker --filter=@pagent/web",
+    "dev:apps": "pnpm db:migrate && pnpm db:generate && turbo build --filter=@pagent/db --filter=@pagent/shared --filter=@pagent/providers --filter=@pagent/core && turbo dev --filter=@pagent/api --filter=@pagent/worker --filter=@pagent/web",
+    "dev:all": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "db:generate": "bash -lc 'set -a; source .env; set +a; cd packages/db && ./node_modules/.bin/prisma generate'",
+    "db:migrate": "bash -lc 'set -a; source .env; set +a; cd packages/db && ./node_modules/.bin/prisma migrate deploy'",
+    "tools:seed": "bash -lc 'set -a; source .env; set +a; node scripts/seed_default_tools.mjs --email 1037959324@qq.com'"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.15",
+    "turbo": "^2.5.0",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,544 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProviderType {
+  openai_compat
+  anthropic
+  gemini
+  mock
+}
+
+enum RunStatus {
+  queued
+  running
+  succeeded
+  failed
+  canceled
+}
+
+enum MessageRole {
+  system
+  user
+  assistant
+  tool
+}
+
+enum GroupSenderType {
+  user
+  agent
+}
+
+enum AgentRoutineAction {
+  sleep
+  wake
+  web_surf
+  check_email
+  check_stocks
+  search_install_skills
+  equip_skills
+  daily_generate_skill
+  cleanup_low_score_skills
+  daily_supervisor_report
+  guardian_check_logs
+  report_to_group_owner
+  report_group_owner_to_project_lead
+  report_project_lead_to_supervisor
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  supervisorAgentId String? @unique
+  guardianAgentId   String? @unique
+
+  fullName       String?
+  nationality    String?
+  ethnicity      String?
+  specialties    String?
+  hobbies        String?
+  gender         String?
+  age            Int?
+  contact        String?
+  contactWechat  String?
+  contactPhone   String?
+  contactEmail   String?
+  workExperience String? @db.Text
+  avatarSvg      String? @db.Text
+
+  supervisorAgent Agent? @relation("UserSupervisorAgent", fields: [supervisorAgentId], references: [id], onDelete: SetNull)
+  guardianAgent   Agent? @relation("UserGuardianAgent", fields: [guardianAgentId], references: [id], onDelete: SetNull)
+  projects      Project[]
+  refreshTokens RefreshToken[]
+  groupMessages GroupMessage[] @relation("UserGroupMessages")
+  tools         Tool[]
+  emails        EmailOutbox[]
+  systemLogs    SystemLog[]
+  patchProposals PatchProposal[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Project {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  leadAgentId String?
+  createdAt DateTime @default(now())
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadAgent        Agent?            @relation("ProjectLeadAgent", fields: [leadAgentId], references: [id], onDelete: SetNull)
+  providerAccounts ProviderAccount[]
+  agents           Agent[]
+  groups           Group[]
+  runs             Run[]
+  sessions         Session[]
+  knowledgeBases   KnowledgeBase[]
+
+  @@index([userId])
+  @@index([leadAgentId])
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  ownerAgentId String?
+  description String? @db.Text
+  notice    String? @db.Text
+  createdAt DateTime @default(now())
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ownerAgent Agent?    @relation("GroupOwnerAgent", fields: [ownerAgentId], references: [id], onDelete: SetNull)
+  members GroupMember[]
+  messages GroupMessage[]
+
+  @@index([projectId])
+  @@index([ownerAgentId])
+  @@unique([projectId, name])
+}
+
+model GroupMember {
+  groupId   String
+  agentId   String
+  role      String   @default("member")
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, agentId])
+  @@index([agentId])
+}
+
+model GroupMessage {
+  id           String          @id @default(cuid())
+  groupId      String
+  senderType   GroupSenderType
+  senderUserId String?
+  senderAgentId String?
+  content      String          @db.Text
+  createdAt    DateTime        @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  senderUser User? @relation("UserGroupMessages", fields: [senderUserId], references: [id], onDelete: SetNull)
+  senderAgent Agent? @relation("AgentGroupMessages", fields: [senderAgentId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, createdAt])
+  @@index([senderAgentId])
+  @@index([senderUserId])
+}
+
+model Tool {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String
+  jsonSchema  Json
+  createdAt   DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentTools AgentTool[]
+
+  @@index([userId])
+  @@unique([userId, name])
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  service   String
+  level     String
+  message   String   @db.Text
+  stack     String?  @db.Text
+  metaJson  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([service, createdAt])
+  @@index([userId, createdAt])
+}
+
+model PatchProposal {
+  id          String   @id @default(cuid())
+  userId      String
+  agentId     String?
+  title       String
+  description String? @db.Text
+  patchText   String  @db.Text
+  status      String  @default("proposed") // proposed | applied | rejected | failed
+  error       String? @db.Text
+  createdAt   DateTime @default(now())
+  appliedAt   DateTime?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([agentId, createdAt])
+  @@index([status, createdAt])
+}
+
+model EmailOutbox {
+  id           String   @id @default(cuid())
+  userId       String
+  agentId      String?
+  to           String
+  subject      String
+  bodyMarkdown String   @db.Text
+  status       String   @default("stored") // stored | sent | failed
+  error        String?  @db.Text
+  createdAt    DateTime @default(now())
+  sentAt       DateTime?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([agentId, createdAt])
+}
+
+model AgentMail {
+  id          String   @id @default(cuid())
+  fromAgentId String
+  toAgentId   String
+  subject     String
+  bodyMarkdown String @db.Text
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+
+  fromAgent Agent @relation("AgentMailFrom", fields: [fromAgentId], references: [id], onDelete: Cascade)
+  toAgent   Agent @relation("AgentMailTo", fields: [toAgentId], references: [id], onDelete: Cascade)
+
+  @@index([toAgentId, createdAt])
+  @@index([fromAgentId, createdAt])
+}
+
+model SessionSummary {
+  id            String   @id @default(cuid())
+  sessionId     String   @unique
+  upToMessageId String?
+  summaryMarkdown String @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AgentTool {
+  agentId   String
+  toolId    String
+  createdAt DateTime @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  tool  Tool  @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@id([agentId, toolId])
+  @@index([toolId])
+}
+
+model ProviderAccount {
+  id              String       @id @default(cuid())
+  projectId       String
+  type            ProviderType
+  name            String
+  encryptedApiKey String?
+  configJson      Json
+  createdAt       DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agents  Agent[]
+
+  @@index([projectId])
+}
+
+model Agent {
+  id                String   @id @default(cuid())
+  projectId         String
+  name              String
+  systemPrompt      String
+  defaultModel      String
+  providerAccountId String?
+  skillPaths        String[] @default([])
+  toolsJson         Json
+  ragEnabled        Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  isSupervisor      Boolean  @default(false)
+  isGuardian        Boolean  @default(false)
+  isSleeping        Boolean  @default(false)
+  sleepingSince     DateTime?
+  contextResetAt    DateTime?
+
+  fullName       String?
+  nationality    String?
+  ethnicity      String?
+  specialties    String?
+  hobbies        String?
+  gender         String?
+  age            Int?
+  contact        String?
+  contactWechat  String?
+  contactPhone   String?
+  contactEmail   String?
+  workExperience String? @db.Text
+  avatarSvg      String? @db.Text
+
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  providerAccount ProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: SetNull)
+  groupMembers    GroupMember[]
+  groupMessages   GroupMessage[] @relation("AgentGroupMessages")
+  agentTools      AgentTool[]
+  routines        AgentRoutine[]
+  routineLogs     AgentRoutineLog[]
+  generatedSkills GeneratedSkill[]
+  skillRatings    SkillRating[]
+  runs            Run[]
+  sessions        Session[]
+  supervisedByUsers User[] @relation("UserSupervisorAgent")
+  guardedByUsers    User[] @relation("UserGuardianAgent")
+  leadProjects     Project[] @relation("ProjectLeadAgent")
+  ownedGroups      Group[]   @relation("GroupOwnerAgent")
+  emails          EmailOutbox[]
+  mailSent       AgentMail[] @relation("AgentMailFrom")
+  mailReceived   AgentMail[] @relation("AgentMailTo")
+  patchProposals PatchProposal[]
+
+  @@index([projectId])
+  @@index([providerAccountId])
+  @@unique([projectId, name])
+}
+
+model AgentRoutine {
+  id        String            @id @default(cuid())
+  agentId   String
+  name      String
+  action    AgentRoutineAction
+  cron      String
+  timezone  String            @default("UTC")
+  enabled   Boolean           @default(true)
+  payload   Json?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  logs  AgentRoutineLog[]
+
+  @@index([agentId])
+  @@index([enabled])
+  @@unique([agentId, name])
+}
+
+model AgentRoutineLog {
+  id        String            @id @default(cuid())
+  routineId String
+  agentId   String
+  action    AgentRoutineAction
+  status    String
+  message   String?
+  createdAt DateTime          @default(now())
+
+  routine AgentRoutine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  agent   Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, createdAt])
+  @@index([agentId, createdAt])
+}
+
+model GeneratedSkill {
+  id        String   @id @default(cuid())
+  agentId   String
+  relPath   String   // path relative to generated skills root
+  skillLink String   // /v1/docs/file?ref=...
+  createdAt DateTime @default(now())
+
+  agent   Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  ratings SkillRating[]
+
+  @@index([agentId, createdAt])
+  @@unique([agentId, relPath])
+}
+
+model SkillRating {
+  id               String   @id @default(cuid())
+  agentId          String
+  generatedSkillId String?
+  skillPath        String
+  score            Int
+  note             String?
+  createdAt        DateTime @default(now())
+
+  agent          Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  generatedSkill GeneratedSkill? @relation(fields: [generatedSkillId], references: [id], onDelete: SetNull)
+
+  @@index([agentId, createdAt])
+  @@index([skillPath])
+  @@index([generatedSkillId])
+}
+
+model SkillVector {
+  id          String   @id @default(cuid())
+  skillPath   String   @unique
+  name        String
+  description String
+  contentHash String
+  embedding   Unsupported("vector")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model Run {
+  id          String    @id @default(cuid())
+  projectId   String
+  agentId     String
+  sessionId   String?
+  status      RunStatus @default(queued)
+  input       Json
+  outputJson  Json?
+  error       String?
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agent   Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  events  RunEvent[]
+
+  @@index([projectId])
+  @@index([agentId])
+  @@index([sessionId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  projectId String
+  agentId   String
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agent   Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages Message[]
+  runs     Run[]
+  summary  SessionSummary?
+
+  @@index([projectId])
+  @@index([agentId])
+}
+
+model Message {
+  id         String      @id @default(cuid())
+  sessionId  String
+  role       MessageRole
+  content    String
+  toolName   String?
+  toolCallId String?
+  createdAt  DateTime @default(now())
+
+  tokenInput         Int?
+  tokenInputCached   Int?
+  tokenInputUncached Int?
+  tokenOutput        Int?
+  tokenTotal         Int?
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model RunEvent {
+  id        String   @id @default(cuid())
+  runId     String
+  seq       Int
+  type      String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, seq])
+  @@index([runId, seq])
+}
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  createdAt DateTime @default(now())
+
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@index([projectId])
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  knowledgeBaseId String
+  filename        String
+  mime            String
+  storagePath     String
+  createdAt       DateTime @default(now())
+
+  knowledgeBase KnowledgeBase   @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks        DocumentChunk[]
+
+  @@index([knowledgeBaseId])
+}
+
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  idx        Int
+  text       String
+  embedding  Unsupported("vector")?
+  metadata   Json
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, idx])
+}

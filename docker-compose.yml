@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: pagent
+      POSTGRES_PASSWORD: pagent
+      POSTGRES_DB: pagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pagent -d pagent -h 127.0.0.1 -p 5432"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://pagent:pagent@postgres:5432/pagent?schema=public
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -lc "corepack enable && pnpm install && pnpm -w db:migrate && pnpm -w db:generate"
+
+  api:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://pagent:pagent@postgres:5432/pagent?schema=public
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./:/app
+      - ./uploads:/app/uploads
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @pagent/api dev"
+
+  worker:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://pagent:pagent@postgres:5432/pagent?schema=public
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./:/app
+      - ./uploads:/app/uploads
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @pagent/worker dev"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    image: node:20-alpine
+    profiles: ["app"]
+    working_dir: /app
+    env_file: .env
+    environment:
+      PAGENT_INTERNAL_API_BASE_URL: http://api:4000
+    volumes:
+      - ./:/app
+    command: sh -lc "corepack enable && pnpm install && pnpm --filter @pagent/web dev"
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
